@@ -1,0 +1,8 @@
+path,type,content
+\,dir,
+\a,dir,
+\a\b,dir,
+\a\b\c,dir,
+\a\b\c\file.txt,file,ZGVlcCBmaWxl
+\a\b\d,file,ZGlyIGQ=
+\x,y,

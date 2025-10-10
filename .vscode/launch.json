@@ -9,10 +9,10 @@
             "name": "запуск эмулятора с вфс",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/prac2.py",
+            "program": "${workspaceFolder}/Prac1.py",
             "args": [
-                "--vfs", ".",
-                "--script","text1.txt"
+                "--vfs", "vfs_deep.csv",
+                "--script","test_full.txt"
             ],
             "console": "integratedTerminal"
         }

@@ -1,20 +1,93 @@
 import sys
 import os
 import argparse
+import csv
+import base64
+import json
+from collections import defaultdict
 
+class VFS:
+    def __init__(self, csv_path):
+        self.csv_path = csv_path
+        self.fs = {}  # путь -> {'type': 'file'/'dir', 'content': base64 или none}
+        self._load_from_csv()
+
+    def _load_from_csv(self):
+        """загружает vfs из csv-файла в память"""
+        if not os.path.exists(self.csv_path):
+            raise FileNotFoundError(f"vfs не найден: {self.csv_path}")
+        
+        # корень всегда существует
+        self.fs["/"] = {"type": "dir", "content": None}
+
+        with open(self.csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                path = row['path']
+                type_ = row['type']
+                content = row.get('content', '')
+
+                # нормализуем путь: всегда начинается с /
+                if not path.startswith('/'):
+                    path = '/' + path
+                path = os.path.normpath(path)
+
+                self.fs[path] = {
+                    'type': type_,
+                    'content': content if type_ == 'file' else None
+                }
+
+                # автоматически создаём родительские директории
+                parent = os.path.dirname(path)
+                while parent != '/' and parent not in self.fs:
+                    self.fs[parent] = {'type': 'dir', 'content': None}
+                    parent = os.path.dirname(parent)
+
+    def save_to_csv(self, output_path):
+        """сохраняет текущее состояние vfs в csv"""
+        with open(output_path, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['path', 'type', 'content'])
+            for path in sorted(self.fs.keys()):
+                if path == '/':
+                    continue  # корень не сохраняем
+                meta = self.fs[path]
+                content = meta['content'] if meta['type'] == 'file' else ''
+                writer.writerow([path, meta['type'], content])
+
+    def get(self, path):
+        """возвращает метаданные по пути или none"""
+        norm_path = os.path.normpath(path)
+        return self.fs.get(norm_path)
+
+    def list_dir(self, path):
+        """возвращает список элементов в директории (для будущего ls)"""
+        norm_path = os.path.normpath(path)
+        if norm_path != '/' and not norm_path.endswith('/'):
+            norm_path += '/'
+        items = []
+        for p in self.fs:
+            if p.startswith(norm_path):
+                rel = p[len(norm_path):]
+                if '/' not in rel and rel:
+                    items.append(rel)
+        return items
+
+    def is_dir(self, path):
+        meta = self.get(path)
+        return meta and meta['type'] == 'dir'
+
+    def is_file(self, path):
+        meta = self.get(path)
+        return meta and meta['type'] == 'file'
+    
 class ShellEmulator:
     def __init__(self, vfs_path, script_path=None):
-        # извлекаем имя vfs из пути (без завершающих слэшей)
+        self.vfs = VFS(vfs_path)  # создаём vfs из csv
         self.vfs_name = os.path.basename(vfs_path.rstrip("/\\"))
-        # сохраняем исходный путь к виртуальной файловой системе
-        self.vfs_path = vfs_path
-        # путь к стартовому скрипту (может быть none)
         self.script_path = script_path
-        # флаг работы эмулятора
         self.running = True
-        # текущая директория (всегда корень, так как логика cd не реализована)
         self.current_dir = "/"
-        # флаг: сейчас выполняется скрипт или интерактивный ввод
         self.stdin_from_script = False
 
     def print_prompt(self):
@@ -51,12 +124,24 @@ class ShellEmulator:
         # устанавливаем флаг остановки
         self.running = False
 
+    def cmd_vfs_save(self, args):
+        if not args:
+            print("vfs-save: укажите путь для сохранения")
+            return
+        output_path = args[0]
+        try:
+            self.vfs.save_to_csv(output_path)
+            print(f"vfs сохранён в '{output_path}'")
+        except Exception as e:
+            print(f"ошибка сохранения vfs: {e}")
+
     def execute_command(self, command, args):
         # словарь поддерживаемых команд
         command_methods = {
             'ls': self.cmd_ls,
             'cd': self.cmd_cd,
             'exit': self.cmd_exit,
+            'vfs-save': self.cmd_vfs_save,  
         }
 
         # если команда известна — вызываем соответствующий метод

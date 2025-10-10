@@ -1,0 +1,7 @@
+# тест всех команд и режимов
+pwd
+ls
+cd /docs
+ls
+vfs-save ./output_test.csv
+exit
