@@ -1,3 +1,3 @@
 @echo off
-python Prac1.py --vfs vfs_medium.csv --script test_full.txt
+C:\Users\1\AppData\Local\Programs\Python\Python313\python.exe Prac1.py --vfs vfs_test.csv --script test_full.txt
 pause

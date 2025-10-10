@@ -1,0 +1,25 @@
+# тест всех команд этапа 3
+
+# базовая навигация
+ls
+cd /data
+ls
+
+# cat
+cat /hello.txt
+cat /data/numbers.txt
+
+# uniq
+uniq /data/numbers.txt
+
+# ошибки
+cd /nonexistent
+ls /nonexistent
+cat /docs
+cat /missing.txt
+uniq /missing.txt
+
+# возврат и сохранение
+cd /
+vfs-save ./vfs_output.csv
+exit

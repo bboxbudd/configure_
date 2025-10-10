@@ -3,8 +3,6 @@ import os
 import argparse
 import csv
 import base64
-import json
-from collections import defaultdict
 
 class VFS:
     def __init__(self, csv_path):
@@ -13,35 +11,38 @@ class VFS:
         self._load_from_csv()
 
     def _load_from_csv(self):
-        """загружает vfs из csv-файла в память"""
         if not os.path.exists(self.csv_path):
             raise FileNotFoundError(f"vfs не найден: {self.csv_path}")
         
-        # корень всегда существует
         self.fs["/"] = {"type": "dir", "content": None}
 
-        with open(self.csv_path, 'r', encoding='utf-8') as f:
+        with open(self.csv_path, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 path = row['path']
                 type_ = row['type']
                 content = row.get('content', '')
 
-                # нормализуем путь: всегда начинается с /
+                # нормализуем путь: только прямые слэши, без дублей
                 if not path.startswith('/'):
                     path = '/' + path
-                path = os.path.normpath(path)
+                path = path.replace('\\', '/').rstrip('/')
+                while '//' in path:
+                    path = path.replace('//', '/')
 
+                # сохраняем файл или папку
                 self.fs[path] = {
                     'type': type_,
                     'content': content if type_ == 'file' else None
                 }
 
-                # автоматически создаём родительские директории
-                parent = os.path.dirname(path)
-                while parent != '/' and parent not in self.fs:
-                    self.fs[parent] = {'type': 'dir', 'content': None}
-                    parent = os.path.dirname(parent)
+                # создаём все родительские директории
+                if path != '/':
+                    parts = path.split('/')[1:]  # убираем первый пустой элемент
+                    for i in range(1, len(parts)):
+                        parent_path = '/' + '/'.join(parts[:i])
+                        if parent_path not in self.fs:
+                            self.fs[parent_path] = {'type': 'dir', 'content': None}
 
     def save_to_csv(self, output_path):
         """сохраняет текущее состояние vfs в csv"""
@@ -57,18 +58,28 @@ class VFS:
 
     def get(self, path):
         """возвращает метаданные по пути или none"""
-        norm_path = os.path.normpath(path)
-        return self.fs.get(norm_path)
+        # нормализуем путь вручную
+        if not path.startswith('/'):
+            path = '/' + path
+        path = path.replace('\\', '/').rstrip('/')
+        while '//' in path:
+            path = path.replace('//', '/')
+        if path == '':
+            path = '/'
+        return self.fs.get(path)
 
     def list_dir(self, path):
-        """возвращает список элементов в директории (для будущего ls)"""
-        norm_path = os.path.normpath(path)
-        if norm_path != '/' and not norm_path.endswith('/'):
-            norm_path += '/'
+        """возвращает список элементов в директории"""
+        if not path.startswith('/'):
+            path = '/' + path
+        path = path.replace('\\', '/').rstrip('/')
+        if path != '/':
+            path += '/'
+        
         items = []
         for p in self.fs:
-            if p.startswith(norm_path):
-                rel = p[len(norm_path):]
+            if p.startswith(path):
+                rel = p[len(path):]
                 if '/' not in rel and rel:
                     items.append(rel)
         return items
@@ -106,16 +117,134 @@ class ShellEmulator:
         args = parts[1:]
         return command, args
 
-    def cmd_ls(self, args):
-        # заглушка для команды ls: выводим фиксированный список файлов
-        print("файл1.txt  папка1  README.md")
+    def _normalize_path(self, path):
+        """нормализует путь с использованием только '/' (unix-style)"""
+        if path.startswith('/'):
+            # абсолютный путь
+            parts = path.split('/')
+        else:
+            # относительный путь
+            current_parts = self.current_dir.split('/')
+            input_parts = path.split('/')
+            parts = current_parts + input_parts
+
+        # обрабатываем '.' и '..'
+        result = []
+        for part in parts:
+            if part == '' or part == '.':
+                continue
+            elif part == '..':
+                if result:
+                    result.pop()
+            else:
+                result.append(part)
+        
+        normalized = '/' + '/'.join(result)
+        return normalized if normalized != '' else '/'
 
     def cmd_cd(self, args):
-        # заглушка для cd: не меняем директорию, просто выводим сообщение
-        if args:
-            print(f"cd: переход в '{args[0]}' (не реализовано)")
-        else:
+        if not args:
             print("cd: отсутствует аргумент")
+            return
+
+        target = args[0]
+        new_path = self._normalize_path(target)
+
+        # проверяем, существует ли путь
+        if not self.vfs.get(new_path):
+            print(f"cd: нет такого файла или директории: {target}")
+            return
+
+        if not self.vfs.is_dir(new_path):
+            print(f"cd: не является директорией: {target}")
+            return
+
+        self.current_dir = new_path
+
+    def cmd_ls(self, args):
+        if args:
+            # поддержка ls с аргументом (путь)
+            target = args[0]
+            path_to_list = self._normalize_path(target)
+        else:
+            # без аргумента — текущая директория
+            path_to_list = self.current_dir
+
+        if not self.vfs.get(path_to_list):
+            print(f"ls: нет такого файла или директории: {args[0] if args else '.'}")
+            return
+
+        if self.vfs.is_file(path_to_list):
+            # если указали файл — просто выводим его имя
+            print(os.path.basename(path_to_list))
+            return
+
+        # иначе — директория
+        items = self.vfs.list_dir(path_to_list)
+        if items:
+            print("  ".join(sorted(items)))
+        # если пусто — ничего не выводим (как в настоящем ls)
+
+    def cmd_cat(self, args):
+        if not args:
+            print("cat: отсутствует аргумент")
+            return
+
+        target = args[0]
+        file_path = self._normalize_path(target)
+
+        if not self.vfs.is_file(file_path):
+            if not self.vfs.get(file_path):
+                print(f"cat: нет такого файла: {target}")
+            else:
+                print(f"cat: это директория: {target}")
+            return
+
+        # получаем base64-содержимое
+        content_b64 = self.vfs.fs[file_path]['content']
+        if not content_b64:
+            return  # пустой файл
+
+        try:
+            # декодируем из base64 в байты, затем в строку utf-8
+            content_bytes = base64.b64decode(content_b64)
+            content_str = content_bytes.decode('utf-8')
+            print(content_str, end='')  # end='', чтобы не добавлять лишний \n
+        except Exception as e:
+            print(f"cat: ошибка чтения файла {target}: {e}")
+
+    def cmd_uniq(self, args):
+        if not args:
+            print("uniq: отсутствует аргумент")
+            return
+
+        target = args[0]
+        file_path = self._normalize_path(target)
+
+        if not self.vfs.is_file(file_path):
+            if not self.vfs.get(file_path):
+                print(f"uniq: нет такого файла: {target}")
+            else:
+                print(f"uniq: это директория: {target}")
+            return
+
+        content_b64 = self.vfs.fs[file_path]['content']
+        if not content_b64:
+            return
+
+        try:
+            content_bytes = base64.b64decode(content_b64)
+            lines = content_bytes.decode('utf-8').splitlines(keepends=True)
+        except Exception as e:
+            print(f"uniq: ошибка чтения файла {target}: {e}")
+            return
+
+        # выводим только уникальные последовательные строки (как в unix uniq)
+        prev = None
+        for line in lines:
+            if line != prev:
+                print(line, end='')
+                prev = line
 
     def cmd_exit(self, args):
         # при выходе из скрипта не выводим сообщение, иначе — выводим
@@ -140,8 +269,10 @@ class ShellEmulator:
         command_methods = {
             'ls': self.cmd_ls,
             'cd': self.cmd_cd,
+            'cat': self.cmd_cat,
+            'uniq': self.cmd_uniq,
             'exit': self.cmd_exit,
-            'vfs-save': self.cmd_vfs_save,  
+            'vfs-save': self.cmd_vfs_save,
         }
 
         # если команда известна — вызываем соответствующий метод

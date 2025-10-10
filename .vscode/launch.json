@@ -11,8 +11,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/Prac1.py",
             "args": [
-                "--vfs", "vfs_deep.csv",
-                "--script","test_full.txt"
+                "--vfs", "vfs_test.csv",
+                "--script","test_commands.txt"
             ],
             "console": "integratedTerminal"
         }
