@@ -246,6 +246,46 @@ class ShellEmulator:
                 print(line, end='')
                 prev = line
 
+    def cmd_cp(self, args):
+        if len(args) < 2:
+            print("cp: требуется два аргумента (источник и назначение)")
+            return
+
+        src = self._normalize_path(args[0])
+        dst = self._normalize_path(args[1])
+
+        # Проверяем, что источник существует
+        if not self.vfs.is_file(src):
+            if not self.vfs.get(src):
+                print(f"cp: нет такого файла: {args[0]}")
+            else:
+                print(f"cp: '{args[0]}' — это директория")
+            return
+
+        # Получаем содержимое файла
+        content_b64 = self.vfs.fs[src]['content']
+
+        # Если dst — существующая директория, копируем внутрь неё
+        if self.vfs.is_dir(dst):
+            filename = os.path.basename(src)
+            dst = dst.rstrip('/') + '/' + filename
+
+        # Проверяем, не является ли путь некорректным
+        parent_dir = os.path.dirname(dst)
+        if parent_dir == '':
+            parent_dir = '/'
+        if not self.vfs.is_dir(parent_dir):
+            print(f"cp: каталог назначения не существует: {parent_dir}")
+            return
+
+        # Копируем (создаём или перезаписываем)
+        self.vfs.fs[dst] = {
+            'type': 'file',
+            'content': content_b64
+        }
+
+        print(f"файл '{src}' скопирован в '{dst}'")
+
     def cmd_exit(self, args):
         # при выходе из скрипта не выводим сообщение, иначе — выводим
         if not self.stdin_from_script:
@@ -273,6 +313,7 @@ class ShellEmulator:
             'uniq': self.cmd_uniq,
             'exit': self.cmd_exit,
             'vfs-save': self.cmd_vfs_save,
+            'cp': self.cmd_cp,
         }
 
         # если команда известна — вызываем соответствующий метод

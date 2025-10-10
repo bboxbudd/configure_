@@ -1,25 +1,33 @@
-# тест всех команд этапа 3
+# тест команды cp
 
-# базовая навигация
-ls
-cd /data
+
 ls
 
-# cat
-cat /hello.txt
-cat /data/numbers.txt
 
-# uniq
-uniq /data/numbers.txt
+# Копируем файл hello.txt в docs/
+cp /hello.txt /docs
 
-# ошибки
-cd /nonexistent
-ls /nonexistent
-cat /docs
-cat /missing.txt
-uniq /missing.txt
+# Проверим результат
+ls /docs
+cat /docs/hello.txt
 
-# возврат и сохранение
-cd /
-vfs-save ./vfs_output.csv
+# Копируем файл в новый путь
+cp /data/numbers.txt /data/numbers_copy.txt
+ls /data
+cat /data/numbers_copy.txt
+
+# Ошибка: источник не существует
+cp /nofile.txt /data
+
+# Ошибка: источник — директория
+cp /docs /data
+
+# Ошибка: каталог назначения не существует
+cp /hello.txt /no_such_dir/abc.txt
+
+# Проверим перезапись файла
+cp /hello.txt /data/numbers_copy.txt
+cat /data/numbers_copy.txt
+
+# Завершение
 exit
