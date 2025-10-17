@@ -15,6 +15,7 @@ cat /docs/hello.txt
 cp /data/numbers.txt /data/numbers_copy.txt
 ls /data
 cat /data/numbers_copy.txt
+uniq /data/numbers_copy.txt
 
 # Ошибка: источник не существует
 cp /nofile.txt /data
@@ -29,5 +30,4 @@ cp /hello.txt /no_such_dir/abc.txt
 cp /hello.txt /data/numbers_copy.txt
 cat /data/numbers_copy.txt
 
-# Завершение
 exit

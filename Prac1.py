@@ -209,7 +209,7 @@ class ShellEmulator:
             # декодируем из base64 в байты, затем в строку utf-8
             content_bytes = base64.b64decode(content_b64)
             content_str = content_bytes.decode('utf-8')
-            print(content_str, end='')  # end='', чтобы не добавлять лишний \n
+            print(content_str)  # end='', чтобы не добавлять лишний \n
         except Exception as e:
             print(f"cat: ошибка чтения файла {target}: {e}")
 
@@ -245,6 +245,7 @@ class ShellEmulator:
             if line != prev:
                 print(line, end='')
                 prev = line
+        print()
 
     def cmd_cp(self, args):
         if len(args) < 2:
@@ -352,6 +353,7 @@ class ShellEmulator:
                 # парсим команду
                 command, args = self.parse_input(stripped)
                 if command is None:
+
                     continue
 
                 # выполняем команду
@@ -359,11 +361,13 @@ class ShellEmulator:
                 # если была команда exit — выходим из цикла
                 if not self.running:
                     break
-                # добавляем пустую строку для читаемости (как в тз)
-                print()
+                # добавляем пустую строку для читаемости
+                print(' ')
 
         # выключаем режим скрипта
         self.stdin_from_script = False
+        print("скрипт выполнен! \n")
+        self.running = True;
         return True
 
     def run_interactive(self):
@@ -395,8 +399,7 @@ class ShellEmulator:
         # если задан скрипт — запускаем его, иначе — интерактивный режим
         if self.script_path:
             self.run_script()
-        else:
-            self.run_interactive()
+        self.run_interactive()
 
 
 def main():
